@@ -41,6 +41,10 @@ import type {
 } from "../../runtime/host/runtime-host";
 import { RuntimeHostEventBus } from "../../runtime/host/runtime-host-support";
 import {
+	parseSessionCompactionState,
+	type SessionCompactionState,
+} from "../../session/models/session-compaction";
+import {
 	type SessionManifest,
 	SessionManifestSchema,
 } from "../../session/models/session-manifest";
@@ -820,6 +824,9 @@ export class HubRuntimeHost implements RuntimeHost {
 					input.toolPolicies as Record<string, unknown> | undefined,
 				),
 				initialMessages: input.initialMessages,
+				...(input.initialCompactionState
+					? { initialCompactionState: input.initialCompactionState }
+					: {}),
 			});
 		this.registerPlannedSession(
 			plannedSessionId,
@@ -957,6 +964,12 @@ export class HubRuntimeHost implements RuntimeHost {
 										| Record<string, unknown>
 										| undefined,
 								),
+								...(startConfig.initialCompactionState
+									? {
+											initialCompactionState:
+												startConfig.initialCompactionState,
+										}
+									: {}),
 							}
 						: {}),
 				},
@@ -1270,6 +1283,38 @@ export class HubRuntimeHost implements RuntimeHost {
 			metadata,
 		});
 		return { updated: reply.ok };
+	}
+
+	async updateSessionCompactionState(
+		sessionId: string,
+		state: SessionCompactionState,
+	): Promise<{ updated: boolean }> {
+		const target = sessionId.trim();
+		if (!target) return { updated: false };
+		const reply = await this.client.command(
+			"session.compaction.update",
+			{ sessionId: target, state },
+			target,
+		);
+		return {
+			updated: reply.ok && reply.payload?.updated === true,
+		};
+	}
+
+	async readSessionCompactionState(
+		sessionId: string,
+	): Promise<SessionCompactionState | undefined> {
+		const target = sessionId.trim();
+		if (!target) return undefined;
+		const reply = await this.client.command(
+			"session.compaction.get",
+			{ sessionId: target },
+			target,
+		);
+		if (!reply.ok) {
+			throw new Error(hubReplyErrorMessage(reply, "session.compaction.get"));
+		}
+		return parseSessionCompactionState(reply.payload?.state);
 	}
 
 	async readSessionMessages(
