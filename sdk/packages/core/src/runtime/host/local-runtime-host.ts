@@ -454,17 +454,21 @@ export class LocalRuntimeHost implements RuntimeHost {
 			saveState: async (state) => {
 				const activeSession = activeSessionRef;
 				if (!activeSession) return;
+				const stateForSession = {
+					...state,
+					conversation_id: activeSession.sessionId,
+				};
 				try {
 					const result = await this.persistActiveSessionCompactionState(
 						activeSession,
-						state,
+						stateForSession,
 					);
 					if (!result.updated) {
 						configWithProvider.logger?.debug?.(
 							"Skipped stale session compaction state",
 							{
 								sessionId: activeSession.sessionId,
-								sourceMessageCount: state.source_message_count,
+								sourceMessageCount: stateForSession.source_message_count,
 							},
 						);
 					}
@@ -473,6 +477,18 @@ export class LocalRuntimeHost implements RuntimeHost {
 						"Failed to persist session compaction state",
 						{ sessionId: activeSession.sessionId, error },
 					);
+					captureSdkError(configWithProvider.telemetry, {
+						component: "core",
+						operation: "session.persist_compaction_state",
+						severity: "warn",
+						handled: true,
+						error,
+						context: {
+							sessionId: activeSession.sessionId,
+							providerId: configWithProvider.providerId,
+							modelId: configWithProvider.modelId,
+						},
+					});
 				}
 			},
 			clearState: async () => {
@@ -485,6 +501,18 @@ export class LocalRuntimeHost implements RuntimeHost {
 						"Failed to delete stale session compaction state",
 						{ sessionId: activeSession.sessionId, error },
 					);
+					captureSdkError(configWithProvider.telemetry, {
+						component: "core",
+						operation: "session.delete_compaction_state",
+						severity: "warn",
+						handled: true,
+						error,
+						context: {
+							sessionId: activeSession.sessionId,
+							providerId: configWithProvider.providerId,
+							modelId: configWithProvider.modelId,
+						},
+					});
 				}
 			},
 		});
