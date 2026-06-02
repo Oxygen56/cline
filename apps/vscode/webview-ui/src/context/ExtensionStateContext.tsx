@@ -19,7 +19,7 @@ import {
 	requestyDefaultModelInfo,
 } from "../../../src/shared/api"
 import { Environment } from "../../../src/shared/config-types"
-import type { McpMarketplaceCatalog, McpServer, McpViewTab } from "../../../src/shared/mcp"
+import type { McpServer, McpViewTab } from "../../../src/shared/mcp"
 import {
 	createReplicaState,
 	type ReplicaState,
@@ -59,7 +59,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	providerModelsByProvider: Partial<Record<ProviderId, ProviderModelsState>>
 	latestModelRequestIdByProvider: Partial<Record<ProviderId, string>>
 	mcpServers: McpServer[]
-	mcpMarketplaceCatalog: McpMarketplaceCatalog
 	totalTasksSize: number | null
 	lastDismissedCliBannerVersion: number
 	dismissedBanners?: Array<{ bannerId: string; dismissedAt: number }>
@@ -97,7 +96,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setLocalSkillsToggles: (toggles: Record<string, boolean>) => void
 	setRemoteRulesToggles: (toggles: Record<string, boolean>) => void
 	setRemoteWorkflowToggles: (toggles: Record<string, boolean>) => void
-	setMcpMarketplaceCatalog: (value: McpMarketplaceCatalog) => void
 	setTotalTasksSize: (value: number | null) => void
 	setExpandTaskHeader: (value: boolean) => void
 	setShowWelcome: (value: boolean) => void
@@ -337,7 +335,6 @@ export const ExtensionStateContextProvider: React.FC<{
 	const [latestModelRequestIdByProvider, setLatestModelRequestIdByProvider] = useState<Partial<Record<ProviderId, string>>>({})
 	const latestModelRequestIdByProviderRef = useRef<Partial<Record<ProviderId, string>>>({})
 	const [mcpServers, setMcpServers] = useState<McpServer[]>([])
-	const [mcpMarketplaceCatalog, setMcpMarketplaceCatalog] = useState<McpMarketplaceCatalog>({ items: [] })
 
 	const startProviderModelsRequest = useCallback((providerId: ProviderId, requestId: string) => {
 		latestModelRequestIdByProviderRef.current = { ...latestModelRequestIdByProviderRef.current, [providerId]: requestId }
@@ -401,7 +398,6 @@ export const ExtensionStateContextProvider: React.FC<{
 	const settingsButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
 	const worktreesButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
 	const partialMessageUnsubscribeRef = useRef<(() => void) | null>(null)
-	const mcpMarketplaceUnsubscribeRef = useRef<(() => void) | null>(null)
 	const openRouterModelsUnsubscribeRef = useRef<(() => void) | null>(null)
 	const liteLlmModelsUnsubscribeRef = useRef<(() => void) | null>(null)
 	const workspaceUpdatesUnsubscribeRef = useRef<(() => void) | null>(null)
@@ -624,20 +620,6 @@ export const ExtensionStateContextProvider: React.FC<{
 			},
 		})
 
-		// Subscribe to MCP marketplace catalog updates
-		mcpMarketplaceUnsubscribeRef.current = McpServiceClient.subscribeToMcpMarketplaceCatalog(EmptyRequest.create({}), {
-			onResponse: (catalog) => {
-				console.log("[DEBUG] Received MCP marketplace catalog update from gRPC stream")
-				setMcpMarketplaceCatalog(catalog)
-			},
-			onError: (error) => {
-				console.error("Error in MCP marketplace catalog subscription:", error)
-			},
-			onComplete: () => {
-				console.log("MCP marketplace catalog subscription completed")
-			},
-		})
-
 		// Subscribe to OpenRouter models updates
 		openRouterModelsUnsubscribeRef.current = ModelsServiceClient.subscribeToOpenRouterModels(EmptyRequest.create({}), {
 			onResponse: (response: OpenRouterCompatibleModelInfo) => {
@@ -749,10 +731,6 @@ export const ExtensionStateContextProvider: React.FC<{
 			if (partialMessageUnsubscribeRef.current) {
 				partialMessageUnsubscribeRef.current()
 				partialMessageUnsubscribeRef.current = null
-			}
-			if (mcpMarketplaceUnsubscribeRef.current) {
-				mcpMarketplaceUnsubscribeRef.current()
-				mcpMarketplaceUnsubscribeRef.current = null
 			}
 			if (openRouterModelsUnsubscribeRef.current) {
 				openRouterModelsUnsubscribeRef.current()
@@ -870,7 +848,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		providerModelsByProvider,
 		latestModelRequestIdByProvider,
 		mcpServers,
-		mcpMarketplaceCatalog,
 		totalTasksSize,
 		availableTerminalProfiles,
 		showMcp,
@@ -923,7 +900,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		setGroqModels,
 		setBasetenModels,
 		setHuggingFaceModels,
-		setMcpMarketplaceCatalog,
 		setShowMcp,
 		closeMcpView,
 		setGlobalClineRulesToggles: (toggles) =>
