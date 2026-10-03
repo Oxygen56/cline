@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type {
 	AgentConfig,
 	AgentExtensionMessageBuilder,
@@ -21,6 +21,7 @@ import {
 import {
 	CLINE_PLUGIN_IDLE_TIMEOUT_MS_ENV,
 	loadSandboxedPlugins,
+	resolveBootstrapFromWrapper,
 } from "./plugin-sandbox";
 
 function createApiCapture() {
@@ -770,6 +771,86 @@ describe("plugin-sandbox", () => {
 				exists: makeExists(["/wrapper/extensions/bootstrap.js"]),
 			}),
 		).toEqual({ file: "/wrapper/extensions/bootstrap.js" });
+	});
+
+	it("resolves the npm wrapper core bootstrap before the platform package bootstrap", async () => {
+		const previousWrapperPath = process.env.CLINE_WRAPPER_PATH;
+		const wrapperRoot = await mkdtemp(
+			join(tmpdir(), "core-plugin-sandbox-wrapper-core-"),
+		);
+		const platform =
+			process.platform === "win32" ? "windows" : process.platform;
+		const wrapperPath = join(wrapperRoot, "bin", "cline");
+		const corePackageRoot = join(
+			wrapperRoot,
+			"node_modules",
+			"@cline",
+			"core",
+		);
+		const coreBootstrapPath = join(
+			corePackageRoot,
+			"dist",
+			"extensions",
+			"plugin-sandbox-bootstrap.js",
+		);
+		const platformPackageRoot = join(
+			wrapperRoot,
+			"node_modules",
+			"@cline",
+			`cli-${platform}-${process.arch}`,
+		);
+		const platformBootstrapPath = join(
+			platformPackageRoot,
+			"extensions",
+			"plugin-sandbox-bootstrap.js",
+		);
+
+		try {
+			await mkdir(join(wrapperRoot, "bin"), { recursive: true });
+			await mkdir(dirname(coreBootstrapPath), { recursive: true });
+			await mkdir(dirname(platformBootstrapPath), { recursive: true });
+			await writeFile(wrapperPath, "#!/usr/bin/env node\n", "utf8");
+			await writeFile(
+				join(corePackageRoot, "package.json"),
+				JSON.stringify({
+					name: "@cline/core",
+					type: "module",
+					exports: {
+						".": {
+							types: "./dist/index.d.ts",
+							import: "./dist/index.js",
+						},
+					},
+				}),
+				"utf8",
+			);
+			await writeFile(coreBootstrapPath, "console.log('core');\n", "utf8");
+			await writeFile(
+				join(platformPackageRoot, "package.json"),
+				JSON.stringify({
+					name: `@cline/cli-${platform}-${process.arch}`,
+					version: "0.0.0-test",
+					type: "module",
+				}),
+				"utf8",
+			);
+			await writeFile(
+				platformBootstrapPath,
+				"console.log('platform');\n",
+				"utf8",
+			);
+
+			process.env.CLINE_WRAPPER_PATH = wrapperPath;
+
+			expect(resolveBootstrapFromWrapper()).toBe(coreBootstrapPath);
+		} finally {
+			if (previousWrapperPath === undefined) {
+				delete process.env.CLINE_WRAPPER_PATH;
+			} else {
+				process.env.CLINE_WRAPPER_PATH = previousWrapperPath;
+			}
+			await rm(wrapperRoot, { recursive: true, force: true });
+		}
 	});
 
 	it("ignores the npm wrapper platform package bootstrap when running from source", async () => {

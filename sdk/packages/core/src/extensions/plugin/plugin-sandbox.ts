@@ -154,10 +154,45 @@ function getPlatformPackageName(): string {
 	return `@cline/cli-${platform}-${process.arch}`;
 }
 
-function resolveBootstrapFromWrapper(): string | undefined {
+function findDependencyPackageRoot(
+	startDir: string,
+	packageName: string,
+): string | undefined {
+	const parts = packageName.split("/");
+	let current = startDir;
+	while (true) {
+		const candidate = join(current, "node_modules", ...parts);
+		if (existsSync(join(candidate, "package.json"))) {
+			return candidate;
+		}
+		const parent = dirname(current);
+		if (parent === current) {
+			return undefined;
+		}
+		current = parent;
+	}
+}
+
+export function resolveBootstrapFromWrapper(): string | undefined {
 	const wrapperPath = process.env.CLINE_WRAPPER_PATH?.trim();
 	if (!wrapperPath) {
 		return undefined;
+	}
+	const wrapperPackageRoot = dirname(dirname(wrapperPath));
+	const corePackageRoot = findDependencyPackageRoot(
+		wrapperPackageRoot,
+		"@cline/core",
+	);
+	if (corePackageRoot) {
+		const candidate = join(
+			corePackageRoot,
+			"dist",
+			"extensions",
+			"plugin-sandbox-bootstrap.js",
+		);
+		if (existsSync(candidate)) {
+			return candidate;
+		}
 	}
 	try {
 		const requireFromWrapper = createRequire(wrapperPath);
