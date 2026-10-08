@@ -781,12 +781,7 @@ describe("plugin-sandbox", () => {
 		const platform =
 			process.platform === "win32" ? "windows" : process.platform;
 		const wrapperPath = join(wrapperRoot, "bin", "cline");
-		const corePackageRoot = join(
-			wrapperRoot,
-			"node_modules",
-			"@cline",
-			"core",
-		);
+		const corePackageRoot = join(wrapperRoot, "node_modules", "@cline", "core");
 		const coreBootstrapPath = join(
 			corePackageRoot,
 			"dist",
